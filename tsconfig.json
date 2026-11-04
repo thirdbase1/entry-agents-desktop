@@ -1,0 +1,11 @@
+{
+  "extends": "@entry-agents/tsconfig/base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["bun-types", "node"],
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"]
+}

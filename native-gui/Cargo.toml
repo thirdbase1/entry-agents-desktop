@@ -1,0 +1,18 @@
+[package]
+name = "entry-desktop"
+version = "1.0.0"
+edition = "2021"
+description = "Entry Desktop V1 — Native 3-Column AI Development Environment (No Electron, No WebView)"
+
+[[bin]]
+name = "entry-desktop"
+path = "src/main.rs"
+
+[dependencies]
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+egui = "0.29"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ureq = { version = "2.10", features = ["json"] }
+open = "5.3"
+rfd = "0.15"

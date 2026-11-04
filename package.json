@@ -1,0 +1,24 @@
+{
+  "name": "@entry-agents/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Entry Desktop V1 — Native Core & Sidecar Runtime following OpenCode architecture",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "build:sidecar:win": "bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/entry-agent-sidecar.exe"
+  },
+  "dependencies": {
+    "@entry-agents/agent": "workspace:*",
+    "@entry-agents/sandbox": "workspace:*",
+    "@entry-agents/shared": "workspace:*",
+    "nanoid": "^5.0.0"
+  },
+  "devDependencies": {
+    "@entry-agents/tsconfig": "workspace:*",
+    "@types/bun": "latest",
+    "@types/node": "^22"
+  }
+}
