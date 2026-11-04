@@ -1,5 +1,5 @@
 /**
- * OpenCode-style Plugin & Hook System for Entry Desktop
+ * Modular Plugin & Hook System for Entry Desktop
  * Mirrors `packages/core/src/plugin/hooks.ts`.
  *
  * Promise #5: "Extend everything: Plugins make Entry capable of growing beyond its original developers."

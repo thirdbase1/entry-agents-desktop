@@ -11,7 +11,7 @@
  *    - Global Skills (`globalSkillRefs`: `Array<{ source: string; skillName: string }>`)
  *    - MCP Servers (`mcpServers`: `Array<{ id, name, transport: "http" | "sse" | "stdio", url, command?, headers?, enabled }>`)
  *    - Connections (GitHub & Google OAuth status + quick link to `https://entry-agents.dev/settings/connections`)
- * 2. **OpenCode Desktop Settings** (`packages/desktop` & `packages/core`):
+ * 2. **Desktop Runtime Settings** (`packages/desktop` & `packages/core`):
  *    - `autoCompactContext`: Automatic context compaction when token usage nears model context window
  *    - `verificationGateEnabled`: Automatically run verification checks (`typecheck` / `test`) after file edits
  *    - `commandTimeoutSeconds`: Default shell execution timeout (10s - 600s, default 120s)
@@ -57,7 +57,7 @@ export interface DesktopSettingsState {
   globalSkillRefs: GlobalSkillRef[];
   mcpServers: McpServerConfig[];
 
-  // OpenCode Desktop Settings
+  // Desktop Runtime Settings
   autoCompactContext: boolean;
   verificationGateEnabled: boolean;
   commandTimeoutSeconds: number;

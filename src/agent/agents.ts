@@ -1,5 +1,5 @@
 /**
- * OpenCode-style Agent Registry (`build`, `plan`, `explore`, `general`, `title`, `summary`)
+ * Modular Agent Registry (`build`, `plan`, `explore`, `general`, `title`, `summary`)
  * Mirrors `packages/core/src/plugin/agent.ts` and `packages/core/src/plugin/plan.ts`.
  *
  * Embodies Entry Desktop's 5 Core Promises:

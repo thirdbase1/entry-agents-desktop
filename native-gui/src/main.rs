@@ -13,7 +13,7 @@
 //!      build/plan toggle, and send/stop button.
 //!    - Right Column: Tabs (Workspace Diff & Artifacts), + New Tab, Expand/Restore full-width,
 //!      Hide panel, Sub-bar with "Artifact", Copy/Save options, Outline jump menu, and Document body.
-//! 3. Full Settings view combining Entry Web Settings + OpenCode Desktop Runtime Settings.
+//! 3. Full Settings view combining Entry Web Settings + Desktop Runtime Settings.
 
 use eframe::egui::{
     self, Align, Color32, FontFamily, FontId, Frame, Id, Key, Layout, Margin, Pos2, Rect,
@@ -257,7 +257,7 @@ struct DiffResponse {
     deletions: i64,
 }
 
-// Settings structs combining Entry Web + OpenCode
+// Settings structs combining Entry Web + Desktop
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 struct McpServerItem {
     id: String,
@@ -403,6 +403,10 @@ struct EntryDesktopApp {
     project_path_input: String,
     selected_project_id: Option<String>,
 
+    // Column widths (all columns resizable)
+    left_width: f32,
+    right_width: f32,
+
     // Auth & Login
     auth: AuthStatusResponse,
     auth_loading: bool,
@@ -410,9 +414,6 @@ struct EntryDesktopApp {
     device_status_text: Option<String>,
     device_expired: bool,
     auth_error: Option<String>,
-    show_token_login: bool,
-    manual_token_input: String,
-    manual_email_input: String,
 
     // Live Models
     models: Vec<LiveModel>,
@@ -500,9 +501,8 @@ impl EntryDesktopApp {
             device_status_text: None,
             device_expired: false,
             auth_error: None,
-            show_token_login: false,
-            manual_token_input: String::new(),
-            manual_email_input: String::new(),
+            left_width: 335.0,
+            right_width: 560.0,
             models: Vec::new(),
             models_error: None,
             credit_gate: None,
@@ -837,37 +837,7 @@ impl EntryDesktopApp {
         });
     }
 
-    fn submit_manual_token(&mut self) {
-        let token = self.manual_token_input.trim().to_string();
-        if token.is_empty() {
-            self.auth_error = Some("Please enter a valid Entry session token.".to_string());
-            return;
-        }
-        let email = self.manual_email_input.trim().to_string();
-        self.auth_error = None;
-        self.auth_loading = true;
-        let url = self.sidecar_url.clone();
-        let tx = self.tx.clone();
-        thread::spawn(move || {
-            match Self::http_post::<AuthStatusResponse>(
-                &format!("{url}/auth/token"),
-                serde_json::json!({
-                    "token": token,
-                    "email": if email.is_empty() { None } else { Some(email) }
-                }),
-                8,
-            ) {
-                Ok(status) => {
-                    let _ = tx.send(WorkerEvent::AuthUpdated(Ok(status)));
-                }
-                Err(e) => {
-                    let _ = tx.send(WorkerEvent::AuthUpdated(Err(format!(
-                        "Authentication failed: {e}"
-                    ))));
-                }
-            }
-        });
-    }
+
 
     fn sign_out(&mut self) {
         let url = self.sidecar_url.clone();
@@ -1263,8 +1233,7 @@ impl EntryDesktopApp {
                         Ok(status) => {
                             self.auth = status;
                             self.auth_error = None;
-                            self.manual_token_input.clear();
-                            if self.auth.authenticated {
+                                                        if self.auth.authenticated {
                                 self.fetch_models();
                                 self.refresh_all();
                             }
@@ -1335,40 +1304,40 @@ impl EntryDesktopApp {
             .show(ctx, |ui| {
                 ui.vertical_centered(|ui| {
                     let available_h = ui.available_height();
-                    ui.add_space((available_h * 0.14).max(32.0));
+                    ui.add_space((available_h * 0.18).max(40.0));
 
                     Frame::none()
                         .fill(BG_SIDE)
                         .stroke(Stroke::new(1.0_f32, LINE_STRONG))
-                        .rounding(Rounding::same(12.0))
-                        .inner_margin(Margin::symmetric(36.0, 32.0))
+                        .rounding(Rounding::same(14.0))
+                        .inner_margin(Margin::symmetric(40.0, 36.0))
                         .show(ui, |ui| {
-                            ui.set_max_width(440.0);
-                            ui.set_min_width(380.0);
+                            ui.set_max_width(420.0);
+                            ui.set_min_width(360.0);
 
                             ui.vertical_centered(|ui| {
                                 // Exact Entry Web Favicon Logo (48x48)
                                 let (rect, _resp) = ui.allocate_exact_size(Vec2::new(48.0, 48.0), Sense::hover());
                                 draw_entry_favicon(ui, rect);
 
-                                ui.add_space(16.0);
+                                ui.add_space(18.0);
                                 ui.label(
-                                    RichText::new("Sign in to Entry Desktop")
-                                        .size(21.0)
+                                    RichText::new("Welcome to Entry Agents")
+                                        .size(22.0)
                                         .strong()
                                         .color(TEXT),
                                 );
-                                ui.add_space(4.0);
+                                ui.add_space(6.0);
                                 ui.label(
                                     RichText::new(
-                                        "Connect your Entry account to access live models and run the coding agent on your local projects.",
+                                        "Sign in to your Entry account to access live models and workspaces.",
                                     )
                                     .size(13.5)
                                     .color(TEXT_2),
                                 );
                             });
 
-                            ui.add_space(22.0);
+                            ui.add_space(24.0);
 
                             if let Some(err) = &self.auth_error {
                                 Frame::none()
@@ -1382,166 +1351,59 @@ impl EntryDesktopApp {
                                 ui.add_space(14.0);
                             }
 
-                            if let Some(flow) = self.device_flow.clone() {
+                            if self.device_flow.is_some() {
                                 Frame::none()
                                     .fill(BG_RAISE)
-                                    .stroke(Stroke::new(1.0_f32, ACCENT))
+                                    .stroke(Stroke::new(1.0_f32, LINE_STRONG))
                                     .rounding(Rounding::same(10.0))
-                                    .inner_margin(Margin::symmetric(18.0, 16.0))
+                                    .inner_margin(Margin::symmetric(24.0, 20.0))
                                     .show(ui, |ui| {
                                         ui.vertical_centered(|ui| {
+                                            ui.add(egui::Spinner::new().size(32.0).color(ACCENT));
+                                            ui.add_space(14.0);
                                             ui.label(
-                                                RichText::new("DEVICE AUTHORIZATION CODE")
-                                                    .size(11.5)
+                                                RichText::new("Waiting for authorization...")
+                                                    .size(15.0)
                                                     .strong()
-                                                    .color(TEXT_3),
+                                                    .color(TEXT),
                                             );
-                                            ui.add_space(6.0);
-                                            ui.label(
-                                                RichText::new(&flow.code)
-                                                    .font(FontId::new(28.0, FontFamily::Monospace))
-                                                    .strong()
-                                                    .color(ACCENT),
-                                            );
-                                            ui.add_space(8.0);
+                                            ui.add_space(4.0);
                                             ui.label(
                                                 RichText::new(
-                                                    "1. Confirm this 6-digit code in the browser tab that opened.\n2. Click Approve on entry-agents.dev to complete sign-in.",
+                                                    "Please complete sign-in in your browser window.",
                                                 )
                                                 .size(13.0)
-                                                .color(TEXT_2),
+                                                .color(TEXT_3),
                                             );
-                                            ui.add_space(12.0);
+                                            ui.add_space(16.0);
 
-                                            if !self.device_expired {
-                                                ui.horizontal(|ui| {
-                                                    ui.spinner();
-                                                    ui.label(
-                                                        RichText::new(
-                                                            self.device_status_text
-                                                                .as_deref()
-                                                                .unwrap_or(
-                                                                    "Waiting for approval...",
-                                                                ),
-                                                        )
-                                                        .size(12.5)
+                                            if ui
+                                                .button(
+                                                    RichText::new("Cancel")
+                                                        .size(13.0)
                                                         .color(TEXT_2),
-                                                    );
-                                                });
+                                                )
+                                                .clicked()
+                                            {
+                                                self.device_flow = None;
+                                                self.device_status_text = None;
+                                                self.device_expired = false;
                                             }
-
-                                            ui.add_space(10.0);
-                                            ui.horizontal(|ui| {
-                                                if ui
-                                                    .button(
-                                                        RichText::new("Re-open Browser")
-                                                            .size(13.0)
-                                                            .color(ACCENT),
-                                                    )
-                                                    .clicked()
-                                                {
-                                                    let _ =
-                                                        open::that(&flow.verification_uri_complete);
-                                                }
-                                                if ui
-                                                    .button(
-                                                        RichText::new("Copy Link")
-                                                            .size(13.0)
-                                                            .color(TEXT_2),
-                                                    )
-                                                    .clicked()
-                                                {
-                                                    ctx.copy_text(
-                                                        flow.verification_uri_complete.clone(),
-                                                    );
-                                                }
-                                                if ui
-                                                    .button(
-                                                        RichText::new("New Code")
-                                                            .size(13.0)
-                                                            .color(TEXT_2),
-                                                    )
-                                                    .clicked()
-                                                {
-                                                    self.start_device_login();
-                                                }
-                                            });
                                         });
                                     });
                             } else {
                                 let sign_in_btn = egui::Button::new(
-                                    RichText::new("Sign in with Entry Account")
+                                    RichText::new("Sign in with Entry")
                                         .size(15.0)
                                         .strong()
                                         .color(Color32::WHITE),
                                 )
                                 .fill(ACCENT)
-                                .min_size(Vec2::new(ui.available_width(), 42.0))
+                                .min_size(Vec2::new(ui.available_width(), 44.0))
                                 .rounding(Rounding::same(8.0));
 
                                 if ui.add(sign_in_btn).clicked() {
                                     self.start_device_login();
-                                }
-                            }
-
-                            ui.add_space(18.0);
-                            ui.separator();
-                            ui.add_space(10.0);
-
-                            let toggle_label = if self.show_token_login {
-                                "▾ Sign in with an existing Entry session token"
-                            } else {
-                                "▸ Sign in with an existing Entry session token"
-                            };
-                            if ui
-                                .add(
-                                    egui::Button::new(
-                                        RichText::new(toggle_label).size(12.5).color(TEXT_3),
-                                    )
-                                    .frame(false),
-                                )
-                                .clicked()
-                            {
-                                self.show_token_login = !self.show_token_login;
-                            }
-
-                            if self.show_token_login {
-                                ui.add_space(8.0);
-                                ui.label(
-                                    RichText::new("Account Email (optional)")
-                                        .size(12.0)
-                                        .color(TEXT_3),
-                                );
-                                ui.add(
-                                    TextEdit::singleline(&mut self.manual_email_input)
-                                        .hint_text("you@company.com")
-                                        .desired_width(f32::INFINITY),
-                                );
-                                ui.add_space(6.0);
-                                ui.label(
-                                    RichText::new("Session Token")
-                                        .size(12.0)
-                                        .color(TEXT_3),
-                                );
-                                ui.add(
-                                    TextEdit::singleline(&mut self.manual_token_input)
-                                        .password(true)
-                                        .hint_text("Paste your Entry session token")
-                                        .desired_width(f32::INFINITY),
-                                );
-                                ui.add_space(10.0);
-                                let token_btn = egui::Button::new(
-                                    RichText::new("Verify & Sign In")
-                                        .size(13.5)
-                                        .color(TEXT),
-                                )
-                                .fill(BG_RAISE)
-                                .stroke(Stroke::new(1.0_f32, LINE_STRONG))
-                                .min_size(Vec2::new(ui.available_width(), 34.0))
-                                .rounding(Rounding::same(6.0));
-
-                                if ui.add(token_btn).clicked() {
-                                    self.submit_manual_token();
                                 }
                             }
                         });
@@ -2843,7 +2705,7 @@ impl EntryDesktopApp {
     }
 
     // ========================================================================
-    // Comprehensive Settings Window (Entry Web + OpenCode Runtime)
+    // Comprehensive Settings Window (Entry Web + Desktop Runtime)
     // ========================================================================
     fn render_settings_window(&mut self, ctx: &egui::Context) {
         let mut open = self.active_modal == ActiveModal::Settings;
@@ -2868,7 +2730,7 @@ impl EntryDesktopApp {
                                     (SettingsTab::Models, "🤖 Models"),
                                     (SettingsTab::Mcp, "🔌 MCP Servers"),
                                     (SettingsTab::Skills, "🧩 Global Skills"),
-                                    (SettingsTab::DesktopRuntime, "⚡ OpenCode Runtime"),
+                                    (SettingsTab::DesktopRuntime, "⚡ Desktop Runtime"),
                                     (SettingsTab::Connections, "🔗 Connections"),
                                 ];
                                 for (tab, title) in tabs {
@@ -2953,7 +2815,7 @@ impl EntryDesktopApp {
                                         ui.text_edit_singleline(&mut self.new_skill_repo);
                                     }
                                     SettingsTab::DesktopRuntime => {
-                                        ui.heading("OpenCode Desktop Runtime Settings");
+                                        ui.heading("Desktop Runtime Settings");
                                         ui.add_space(10.0);
                                         ui.checkbox(&mut self.settings.auto_compact_context, "Auto-compact context on token overflow");
                                         ui.checkbox(&mut self.settings.verification_gate_enabled, "Verification gate: run automated tests before completing turn");
@@ -3155,21 +3017,24 @@ impl eframe::App for EntryDesktopApp {
 
         if self.show_left {
             egui::SidePanel::left("entry_left_column")
-                .exact_width(335.0)
-                .resizable(false)
+                .default_width(self.left_width)
+                .width_range(200.0..=650.0)
+                .resizable(true)
                 .frame(
                     Frame::none()
                         .fill(BG_SIDE)
                         .stroke(Stroke::new(1.0_f32, LINE)),
                 )
                 .show(ctx, |ui| {
+                    self.left_width = ui.available_width();
                     self.render_left_column(ui);
                 });
         }
 
         if self.show_right {
             egui::SidePanel::right("entry_right_column")
-                .exact_width(560.0)
+                .default_width(self.right_width)
+                .width_range(280.0..=950.0)
                 .resizable(true)
                 .frame(
                     Frame::none()
@@ -3177,6 +3042,7 @@ impl eframe::App for EntryDesktopApp {
                         .stroke(Stroke::new(1.0_f32, LINE)),
                 )
                 .show(ctx, |ui| {
+                    self.right_width = ui.available_width();
                     self.render_right_column(ui);
                 });
         }

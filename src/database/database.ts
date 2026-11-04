@@ -1,8 +1,8 @@
 /**
- * Local SQLite persistence for Entry Desktop — follows OpenCode's
+ * Local SQLite persistence for Entry Desktop — Production-grade
  * `packages/core/src/database/database.ts` & `schema.gen.ts`.
  *
- * Uses `bun:sqlite` with OpenCode's exact WAL & performance pragmas:
+ * Uses `bun:sqlite` with High-performance WAL & performance pragmas:
  * - PRAGMA journal_mode = WAL
  * - PRAGMA synchronous = NORMAL
  * - PRAGMA busy_timeout = 5000

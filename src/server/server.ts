@@ -267,6 +267,50 @@ export function startSidecarServer(
           return jsonResponse(poll);
         }
 
+        if (req.method === "GET" && path === "/auth/callback") {
+          const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorization successful · Entry Agents</title>
+  <style>
+    body { margin:0; min-height:100vh; display:grid; place-items:center; background:#141414; color:#e8e8e8; font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif; }
+    .card { width:min(100%, 28rem); padding:2.25rem 2rem 1.75rem; background:#1b1b1b; border:1px solid #3a3a3a; border-radius:14px; text-align:center; box-shadow:0 8px 32px rgba(0,0,0,0.4); }
+    .brand { display:flex; justify-content:center; margin-bottom:1.5rem; }
+    .icon { color:#30d158; margin-bottom:1.125rem; display:flex; justify-content:center; }
+    h1 { margin:0; font-size:1.25rem; font-weight:600; color:#fff; }
+    p { margin:0.5rem 0 0; font-size:0.9375rem; color:#b4b4b4; }
+    .footnote { margin:1.5rem 0 0; font-size:0.8125rem; color:#7a7a7a; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="brand">
+      <svg width="40" height="40" viewBox="0 0 64 64" fill="none">
+        <rect width="64" height="64" rx="14" fill="#000" />
+        <polygon points="18.9,41.5 21.9,41.5 17.5,4.96 14.5,4.96" fill="#fff" />
+        <polygon points="27.8,41.5 30.8,41.5 26.4,4.96 23.4,4.96" fill="#fff" />
+        <polygon points="36.7,41.5 39.7,41.5 35.3,4.96 32.3,4.96" fill="#fff" />
+      </svg>
+    </div>
+    <div class="icon">
+      <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9" /><path d="m8.5 12.5 2.4 2.4 4.6-5.4" />
+      </svg>
+    </div>
+    <h1>Authorization successful</h1>
+    <p>Entry is now authorized.</p>
+    <div class="footnote">You can close this window.</div>
+  </main>
+  <script>setTimeout(function(){try{window.close()}catch(e){}}, 2500);</script>
+</body>
+</html>`;
+          return new Response(html, {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+
         if (req.method === "POST" && path === "/auth/token") {
           const body = (await req.json()) as {
             token?: string;

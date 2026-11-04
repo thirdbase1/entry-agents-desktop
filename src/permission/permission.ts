@@ -1,7 +1,7 @@
 /**
  * Entry Desktop V1 — Permission Engine
  *
- * Implements the permission architecture studied in `docs/desktop/opencode-research.md`:
+ * Implements the permission architecture studied in `docs/desktop/architecture.md`:
  * - Actions: `"allow"` | `"ask"` | `"deny"`
  * - Path-based permissions & external directory boundary checks
  * - Sensitive file protection (`.env`, `.env.*`, `.git/config`, `.git/hooks/*`, `*.pem`, `*.key`, `*credentials*`)

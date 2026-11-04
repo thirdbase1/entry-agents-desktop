@@ -1,9 +1,9 @@
 {
   "name": "entry-agents-desktop",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Entry Desktop — Native Rust AI Coding Agent & Local Sidecar Runtime",
+  "description": "Entry Desktop \u2014 Native Rust AI Coding Agent & Local Sidecar Runtime",
   "scripts": {
     "start": "bun run src/index.ts",
     "test": "bun test",
