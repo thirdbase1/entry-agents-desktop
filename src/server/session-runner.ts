@@ -30,6 +30,7 @@ import {
   type PermissionRule,
 } from "../permission/permission";
 import type { PluginRegistry } from "../plugin/hooks";
+import type { EntrySettingsService } from "../settings/settings";
 import {
   executeDesktopTool,
   getOpenAIToolDefinitions,
@@ -111,6 +112,7 @@ export class EntrySessionRunner {
     private readonly plugins: PluginRegistry,
     private readonly entryBaseUrl: string,
     private readonly authService?: EntryDeviceAuthService,
+    private readonly settingsService?: EntrySettingsService,
   ) {}
 
   subscribe(listener: (event: SidecarEvent) => void): () => void {
@@ -501,11 +503,17 @@ export class EntrySessionRunner {
                 const sessionRules =
                   this.sessionPermissionMemory.get(session.id) ?? [];
                 const combinedRules = [...baseRules, ...sessionRules];
-                const action: PermissionAction = evaluatePermission(
+                let action: PermissionAction = evaluatePermission(
                   combinedRules,
                   permName,
                   target,
                 );
+                const permMode =
+                  this.settingsService?.getSettings().defaultPermissionMode ??
+                  "ask";
+                if (permMode === "fullAccess" && action === "ask") {
+                  action = "allow";
+                }
 
                 if (action === "deny") {
                   throw new Error(
@@ -809,11 +817,14 @@ export class EntrySessionRunner {
     currentUserMessageId: string,
     currentPromptText: string,
   ): ChatCompletionMessageParam[] {
+    const customInstr =
+      this.settingsService?.getSettings().customInstructions?.trim() ?? "";
     const systemPrompt = [
       agentDef.systemInstructions,
       `Active project root directory: ${session.directory}`,
       `Operating system: ${process.platform}`,
       `When inspecting or modifying the project, always use the provided tools (read_file, create_file, edit_file, list_directory, search_files, search_content, run_command, read_process_output, cancel_process, project_info, working_directory, git_status, git_diff). Never guess file contents or command outputs.`,
+      customInstr ? `Custom User Instructions:\n${customInstr}` : "",
       session.agent === "plan"
         ? buildPlanModeReminder(session.directory, session.slug)
         : "",

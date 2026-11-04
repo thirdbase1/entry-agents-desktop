@@ -38,6 +38,10 @@ import {
   type LiveDesktopModel,
 } from "../models/live-models";
 import { PluginRegistry } from "../plugin/hooks";
+import {
+  type DesktopSettingsState,
+  EntrySettingsService,
+} from "../settings/settings";
 import { getOpenAIToolDefinitions } from "../tools/toolset";
 import { EntrySessionRunner } from "./session-runner";
 
@@ -57,6 +61,7 @@ export interface RunningSidecarServer {
   url: string;
   db: EntryDesktopDatabase;
   auth: EntryDeviceAuthService;
+  settings: EntrySettingsService;
   runner: EntrySessionRunner;
   stop: () => void;
 }
@@ -87,7 +92,14 @@ export function startSidecarServer(
   const credentialStore = new OsCredentialStore(options.credentialDir);
   const plugins = new PluginRegistry();
   const auth = new EntryDeviceAuthService(db, entryBaseUrl, credentialStore);
-  const runner = new EntrySessionRunner(db, plugins, entryBaseUrl, auth);
+  const settings = new EntrySettingsService(db, entryBaseUrl);
+  const runner = new EntrySessionRunner(
+    db,
+    plugins,
+    entryBaseUrl,
+    auth,
+    settings,
+  );
 
   // Only register a project if explicitly requested via options.defaultProjectDir
   if (options.defaultProjectDir && existsSync(options.defaultProjectDir)) {
@@ -509,6 +521,128 @@ export function startSidecarServer(
           return jsonResponse({ ok });
         }
 
+        // 9. Settings & Customizations (`/settings`, `/mcp`, `/skills`)
+        if (req.method === "GET" && path === "/settings") {
+          return jsonResponse({
+            settings: settings.getSettings(),
+            plugins: plugins.list(),
+          });
+        }
+
+        if (
+          (req.method === "PATCH" || req.method === "POST") &&
+          path === "/settings"
+        ) {
+          const patch = (await req.json()) as Partial<DesktopSettingsState>;
+          const updated = settings.updateSettings(
+            patch,
+            auth.getActiveAccessToken(),
+          );
+          return jsonResponse({ settings: updated });
+        }
+
+        if (req.method === "POST" && path === "/settings/mcp") {
+          const body = (await req.json()) as {
+            name?: string;
+            transport?: "http" | "sse" | "stdio";
+            url?: string;
+            headers?: Record<string, string>;
+          };
+          if (!body.name?.trim() || !body.url?.trim()) {
+            return jsonResponse({ error: "name and url are required" }, 400);
+          }
+          const mcp = settings.addMcpServer({
+            name: body.name,
+            transport: body.transport,
+            url: body.url,
+            headers: body.headers,
+          });
+          return jsonResponse({ mcp, settings: settings.getSettings() });
+        }
+
+        const mcpDeleteMatch = path.match(/^\/settings\/mcp\/([^/]+)$/);
+        if (mcpDeleteMatch && req.method === "DELETE") {
+          const id = decodeURIComponent(mcpDeleteMatch[1]);
+          settings.removeMcpServer(id);
+          return jsonResponse({ settings: settings.getSettings() });
+        }
+
+        if (req.method === "POST" && path === "/settings/skills") {
+          const body = (await req.json()) as {
+            source?: string;
+            skillName?: string;
+          };
+          if (!body.source?.trim() || !body.skillName?.trim()) {
+            return jsonResponse(
+              { error: "source and skillName are required" },
+              400,
+            );
+          }
+          settings.addGlobalSkill(body.source, body.skillName);
+          return jsonResponse({ settings: settings.getSettings() });
+        }
+
+        const skillDeleteMatch = path.match(/^\/settings\/skills\/(\d+)$/);
+        if (skillDeleteMatch && req.method === "DELETE") {
+          const idx = Number(skillDeleteMatch[1]);
+          settings.removeGlobalSkill(idx);
+          return jsonResponse({ settings: settings.getSettings() });
+        }
+
+        // 10. Automations / Schedules (`/schedule`)
+        if (req.method === "GET" && path === "/schedule") {
+          const projectId = url.searchParams.get("projectId") ?? undefined;
+          return jsonResponse({ schedules: db.listSchedules(projectId) });
+        }
+
+        if (req.method === "POST" && path === "/schedule") {
+          const body = (await req.json()) as {
+            projectId?: string;
+            name?: string;
+            cron?: string;
+            prompt?: string;
+            agent?: "build" | "plan";
+          };
+          if (!body.name?.trim() || !body.cron?.trim() || !body.prompt?.trim()) {
+            return jsonResponse(
+              { error: "name, cron, and prompt are required" },
+              400,
+            );
+          }
+          let targetProject = body.projectId
+            ? db.listProjects().find((p) => p.id === body.projectId) ?? null
+            : db.listProjects()[0] ?? null;
+
+          if (!targetProject) {
+            const cwd = process.cwd();
+            targetProject = db.upsertProject({
+              id: `proj_${randomUUID().slice(0, 8)}`,
+              worktree: cwd,
+              vcs: "git",
+              branch: "main",
+              name: basename(cwd) || "project",
+            });
+          }
+
+          const schedule = db.upsertSchedule({
+            id: `sched_${randomUUID().slice(0, 8)}`,
+            project_id: targetProject.id,
+            name: body.name.trim(),
+            cron: body.cron.trim(),
+            prompt: body.prompt.trim(),
+            agent: body.agent ?? "build",
+            enabled: true,
+          });
+          return jsonResponse({
+            schedule,
+            schedules: db.listSchedules(),
+          });
+        }
+
+        if (req.method === "GET" && path === "/plugin") {
+          return jsonResponse({ plugins: plugins.list() });
+        }
+
         return jsonResponse({ error: `Route not found: ${path}` }, 404);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -531,6 +665,7 @@ export function startSidecarServer(
     url: `http://${hostname}:${actualPort}`,
     db,
     auth,
+    settings,
     runner,
     stop: () => {
       server.stop(true);
