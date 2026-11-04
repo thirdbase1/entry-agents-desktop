@@ -612,13 +612,17 @@ impl EntryDesktopApp {
                     dir.join("entry-agent-sidecar")
                 };
                 if candidate.exists() {
-                    if let Ok(child) = Command::new(candidate)
-                        .arg("--port")
+                    let mut cmd = Command::new(candidate);
+                    cmd.arg("--port")
                         .arg(port.to_string())
                         .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
+                        .stderr(Stdio::null());
+                    #[cfg(windows)]
                     {
+                        use std::os::windows::process::CommandExt;
+                        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+                    }
+                    if let Ok(child) = cmd.spawn() {
                         thread::sleep(Duration::from_millis(450));
                         return Some(child);
                     }
@@ -626,15 +630,19 @@ impl EntryDesktopApp {
             }
         }
 
-        if let Ok(child) = Command::new("bun")
-            .arg("run")
+        let mut cmd = Command::new("bun");
+        cmd.arg("run")
             .arg("src/index.ts")
             .arg("--port")
             .arg(port.to_string())
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
+            .stderr(Stdio::null());
+        #[cfg(windows)]
         {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        if let Ok(child) = cmd.spawn() {
             thread::sleep(Duration::from_millis(550));
             return Some(child);
         }
@@ -2851,43 +2859,115 @@ impl EntryDesktopApp {
     // ========================================================================
     fn render_automations_window(&mut self, ctx: &egui::Context) {
         let mut open = self.active_modal == ActiveModal::Automations;
-        egui::Window::new("Automations")
+        egui::Window::new("⚡ Automations")
             .id(Id::new("app_automations_window"))
             .collapsible(false)
-            .default_size([600.0, 400.0])
+            .resizable(true)
+            .default_size([680.0, 480.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.heading("Scheduled Background Automations");
-                ui.add_space(8.0);
-                if self.schedules.is_empty() {
-                    ui.label(RichText::new("No active automations scheduled yet.").color(TEXT_3));
-                } else {
-                    for sch in &self.schedules {
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new(&sch.cron).font(FontId::new(12.0, FontFamily::Monospace)));
-                            ui.label(&sch.prompt);
-                        });
+                ui.heading("Recurring Background Automations");
+                ui.label(RichText::new("Define automated recurring tasks and agent routines that execute on a schedule.").size(13.0).color(TEXT_2));
+                ui.add_space(12.0);
+
+                ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
+                    if self.schedules.is_empty() {
+                        Frame::none()
+                            .fill(BG_RAISE)
+                            .stroke(Stroke::new(1.0_f32, LINE))
+                            .rounding(Rounding::same(8.0))
+                            .inner_margin(Margin::same(16.0))
+                            .show(ui, |ui| {
+                                ui.vertical_centered(|ui| {
+                                    ui.label(RichText::new("No active automations scheduled yet.").color(TEXT_3));
+                                    ui.label(RichText::new("Create an automation below to run tests, monitor code, or generate periodic reports.").size(12.0).color(TEXT_3));
+                                });
+                            });
+                    } else {
+                        let schedules_clone = self.schedules.clone();
+                        for sch in schedules_clone {
+                            Frame::none()
+                                .fill(BG_RAISE)
+                                .stroke(Stroke::new(1.0_f32, LINE))
+                                .rounding(Rounding::same(8.0))
+                                .inner_margin(Margin::symmetric(14.0, 10.0))
+                                .show(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.vertical(|ui| {
+                                            ui.horizontal(|ui| {
+                                                ui.label(RichText::new(&sch.cron).font(FontId::new(12.0, FontFamily::Monospace)).strong().color(ACCENT));
+                                                let title = if sch.prompt.len() > 32 { format!("{}...", &sch.prompt[..32]) } else { sch.prompt.clone() };
+                                                ui.label(RichText::new(format!("• {title}")).strong().color(TEXT));
+                                            });
+                                            ui.add_space(2.0);
+                                            ui.label(RichText::new(&sch.prompt).size(12.5).color(TEXT_2));
+                                        });
+
+                                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                            let url = self.sidecar_url.clone();
+                                            let sid = sch.id.clone();
+                                            if ui.button(RichText::new("Run Now").size(12.0).color(Color32::WHITE)).clicked() {
+                                                thread::spawn(move || {
+                                                    let _ = Self::http_post::<serde_json::Value>(
+                                                        &format!("{url}/schedule/{sid}/run"),
+                                                        serde_json::json!({}),
+                                                        5,
+                                                    );
+                                                });
+                                            }
+                                        });
+                                    });
+                                });
+                            ui.add_space(6.0);
+                        }
                     }
-                }
+                });
+
                 ui.add_space(14.0);
                 ui.separator();
-                ui.label("Add New Recurring Schedule:");
+                ui.add_space(10.0);
+
+                ui.label(RichText::new("Create New Automation:").strong().color(TEXT));
+                ui.add_space(6.0);
+
                 ui.horizontal(|ui| {
-                    ui.label("Cron:");
+                    ui.label("Schedule Presets:");
+                    if ui.button("Every 30m").clicked() {
+                        self.new_schedule_cron = "*/30 * * * *".to_string();
+                    }
+                    if ui.button("Hourly").clicked() {
+                        self.new_schedule_cron = "0 * * * *".to_string();
+                    }
+                    if ui.button("Daily 9am").clicked() {
+                        self.new_schedule_cron = "0 9 * * *".to_string();
+                    }
+                });
+
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    ui.label("Cron Expression:");
                     ui.text_edit_singleline(&mut self.new_schedule_cron);
                 });
-                ui.label("Prompt:");
-                ui.text_edit_singleline(&mut self.new_schedule_prompt);
-                if ui.button("+ Schedule Automation").clicked() {
+
+                ui.add_space(4.0);
+                ui.label("Prompt / Instruction:");
+                ui.text_edit_multiline(&mut self.new_schedule_prompt);
+
+                ui.add_space(8.0);
+                let can_schedule = !self.new_schedule_cron.trim().is_empty() && !self.new_schedule_prompt.trim().is_empty();
+                if ui.add_enabled(can_schedule, egui::Button::new(RichText::new("+ Save Automation").color(Color32::WHITE)).fill(ACCENT)).clicked() {
                     let url = self.sidecar_url.clone();
-                    let cron = self.new_schedule_cron.clone();
-                    let prompt = self.new_schedule_prompt.clone();
+                    let cron = self.new_schedule_cron.trim().to_string();
+                    let prompt = self.new_schedule_prompt.trim().to_string();
+                    let name = if prompt.len() > 30 { format!("{}...", &prompt[..30]) } else { prompt.clone() };
                     thread::spawn(move || {
                         let _ = Self::http_post::<serde_json::Value>(
                             &format!("{url}/schedule"),
                             serde_json::json!({
+                                "name": name,
                                 "cron": cron,
                                 "prompt": prompt,
+                                "agent": "build",
                                 "isDaemon": true
                             }),
                             5,
@@ -2902,22 +2982,95 @@ impl EntryDesktopApp {
     }
 
     // ========================================================================
-    // Customizations Window
+    // Customizations Window (Skills & Extensions)
     // ========================================================================
     fn render_customizations_window(&mut self, ctx: &egui::Context) {
         let mut open = self.active_modal == ActiveModal::Customizations;
-        egui::Window::new("Customizations")
+        egui::Window::new("💼 Customizations")
             .id(Id::new("app_customizations_window"))
             .collapsible(false)
-            .default_size([600.0, 420.0])
+            .resizable(true)
+            .default_size([720.0, 500.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.heading("Agent Customizations & Skills");
-                ui.label("Manage global developer skills and plugin extensions.");
-                ui.add_space(10.0);
-                for sk in &self.skills {
-                    ui.label(format!("• {} ({})", sk.name, sk.repository));
-                }
+                ui.heading("Customizations & Extensibility");
+                ui.label(RichText::new("Extend Entry Agents with official and custom plugins, skills, and MCP servers.").size(13.0).color(TEXT_2));
+                ui.add_space(14.0);
+
+                ui.collapsing("🧩 Global Skills & Knowledge Modules", |ui| {
+                    ui.add_space(6.0);
+                    if self.skills.is_empty() {
+                        ui.label(RichText::new("No custom skills installed.").color(TEXT_3));
+                    } else {
+                        for sk in &self.skills {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(format!("• {}", sk.name)).strong().color(TEXT));
+                                ui.label(RichText::new(format!("({})", sk.repository)).color(TEXT_3));
+                            });
+                        }
+                    }
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label("Install GitHub Repo (owner/repo):");
+                        ui.text_edit_singleline(&mut self.new_skill_repo);
+                        if ui.button("+ Install Skill").clicked() && !self.new_skill_repo.trim().is_empty() {
+                            let url = self.sidecar_url.clone();
+                            let repo = self.new_skill_repo.trim().to_string();
+                            thread::spawn(move || {
+                                let _ = Self::http_post::<serde_json::Value>(
+                                    &format!("{url}/settings/skills"),
+                                    serde_json::json!({
+                                        "name": repo.split('/').last().unwrap_or("skill"),
+                                        "repository": repo,
+                                    }),
+                                    5,
+                                );
+                            });
+                            self.new_skill_repo.clear();
+                        }
+                    });
+                });
+
+                ui.add_space(12.0);
+                ui.collapsing("🔌 Model Context Protocol (MCP) Servers", |ui| {
+                    ui.add_space(6.0);
+                    if self.mcp_servers.is_empty() {
+                        ui.label(RichText::new("No external MCP servers connected.").color(TEXT_3));
+                    } else {
+                        for mcp in &self.mcp_servers {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(&mcp.name).strong().color(TEXT));
+                                ui.label(RichText::new(format!("[{}] {}", mcp.transport, mcp.url)).color(TEXT_3));
+                            });
+                        }
+                    }
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.label("Name:");
+                        ui.text_edit_singleline(&mut self.new_mcp_name);
+                        ui.label("URL/Command:");
+                        ui.text_edit_singleline(&mut self.new_mcp_url);
+                        if ui.button("+ Add Server").clicked() && !self.new_mcp_name.trim().is_empty() {
+                            let url = self.sidecar_url.clone();
+                            let name = self.new_mcp_name.trim().to_string();
+                            let target_url = self.new_mcp_url.trim().to_string();
+                            thread::spawn(move || {
+                                let _ = Self::http_post::<serde_json::Value>(
+                                    &format!("{url}/settings/mcp"),
+                                    serde_json::json!({
+                                        "name": name,
+                                        "transport": "http",
+                                        "url": target_url,
+                                        "enabled": true
+                                    }),
+                                    5,
+                                );
+                            });
+                            self.new_mcp_name.clear();
+                            self.new_mcp_url.clear();
+                        }
+                    });
+                });
             });
         if !open {
             self.active_modal = ActiveModal::None;
@@ -3062,6 +3215,28 @@ impl eframe::App for EntryDesktopApp {
 }
 
 fn main() -> eframe::Result<()> {
+    // Single-instance enforcement:
+    // Only one instance of Entry Desktop should run at a time.
+    let lock_port = 4097;
+    let _instance_listener = match std::net::TcpListener::bind(("127.0.0.1", lock_port)) {
+        Ok(listener) => {
+            let _ = listener.set_nonblocking(true);
+            Some(listener)
+        }
+        Err(_) => {
+            // Another instance is already running! Forward any arguments and exit immediately.
+            let args: Vec<String> = std::env::args().collect();
+            if args.len() > 1 {
+                use std::io::Write;
+                if let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", lock_port)) {
+                    let msg = args[1..].join(" ");
+                    let _ = stream.write_all(msg.as_bytes());
+                }
+            }
+            std::process::exit(0);
+        }
+    };
+
     let icon_bytes = include_bytes!("../assets/favicon_64x64.rgba");
     let icon_data = egui::IconData {
         rgba: icon_bytes.to_vec(),

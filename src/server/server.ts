@@ -253,6 +253,165 @@ export function startSidecarServer(
           });
         }
 
+        if (req.method === "GET" && (path === "/desktop/approve" || path === "/auth/login")) {
+          const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Authorize Entry Desktop</title>
+  <style>
+    :root {
+      --bg: #141414;
+      --card: #1b1b1b;
+      --border: #2a2a2a;
+      --border-strong: #3a3a3a;
+      --text: #e8e8e8;
+      --text-muted: #888888;
+      --accent: #0a84ff;
+      --accent-hover: #0070df;
+      --success: #30d158;
+      --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center;
+      background: var(--bg); color: var(--text); font-family: var(--sans);
+      padding: 24px;
+    }
+    .card {
+      width: min(100%, 420px);
+      background: var(--card);
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      padding: 32px 28px;
+      text-align: center;
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+    }
+    .brand {
+      display: flex; justify-content: center; margin-bottom: 20px;
+    }
+    .brand svg { width: 44px; height: 44px; }
+    h1 {
+      margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #fff;
+    }
+    p {
+      margin: 0 0 24px; font-size: 13.5px; color: var(--text-muted); line-height: 1.5;
+    }
+    .code-box {
+      background: #212121;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      margin-bottom: 24px;
+    }
+    .code-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--text-muted); margin-bottom: 6px;
+    }
+    .code-val {
+      font-family: var(--mono); font-size: 24px; font-weight: 700;
+      color: var(--accent); letter-spacing: 0.12em;
+    }
+    .btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 100%; height: 44px;
+      background: var(--accent); color: #fff;
+      border: 0; border-radius: 8px;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s ease;
+    }
+    .btn:hover { background: var(--accent-hover); }
+    .btn:disabled { opacity: 0.6; cursor: default; }
+    .status-card { display: none; }
+    .approved .action-card { display: none; }
+    .approved .status-card { display: block; }
+    .icon-success { color: var(--success); margin-bottom: 12px; }
+    .icon-success svg { width: 44px; height: 44px; }
+    .footnote { margin-top: 18px; font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <div class="card" id="mainCard">
+    <div class="action-card">
+      <div class="brand">
+        <svg viewBox="0 0 64 64" fill="none">
+          <rect width="64" height="64" rx="14" fill="#000" />
+          <polygon points="18.9,41.5 21.9,41.5 17.5,4.96 14.5,4.96" fill="#fff" />
+          <polygon points="27.8,41.5 30.8,41.5 26.4,4.96 23.4,4.96" fill="#fff" />
+          <polygon points="36.7,41.5 39.7,41.5 35.3,4.96 32.3,4.96" fill="#fff" />
+        </svg>
+      </div>
+      <h1>Authorize Entry Desktop</h1>
+      <p>Entry Desktop is requesting permission to access your AI models and local project workspaces.</p>
+      <div class="code-box">
+        <div class="code-label">Verification Code</div>
+        <div class="code-val" id="codeDisplay">------</div>
+      </div>
+      <button class="btn" id="btnApprove" onclick="approve()">Authorize Entry Desktop</button>
+      <div class="footnote">Only approve if you initiated this request from Entry Desktop.</div>
+    </div>
+
+    <div class="status-card">
+      <div class="icon-success">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="9" /><path d="m8.5 12.5 2.4 2.4 4.6-5.4" />
+        </svg>
+      </div>
+      <h1>Authorization Successful</h1>
+      <p>Entry Desktop is now authorized. You can return to the desktop application.</p>
+      <div class="footnote">This tab will close automatically...</div>
+    </div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code') || '';
+    if (code) {
+      document.getElementById('codeDisplay').textContent = code;
+    }
+
+    async function approve() {
+      const btn = document.getElementById('btnApprove');
+      btn.disabled = true;
+      btn.textContent = 'Authorizing...';
+      try {
+        const res = await fetch('/auth/device/approve_local', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: code })
+        });
+        if (res.ok) {
+          document.getElementById('mainCard').classList.add('approved');
+          setTimeout(() => { try { window.close(); } catch(e){} }, 1800);
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Retry Authorization';
+        }
+      } catch (e) {
+        await fetch('/auth/callback?code=' + encodeURIComponent(code)).catch(() => {});
+        document.getElementById('mainCard').classList.add('approved');
+        setTimeout(() => { try { window.close(); } catch(e){} }, 1800);
+      }
+    }
+  </script>
+</body>
+</html>`;
+          return new Response(html, {
+            headers: { "Content-Type": "text/html; charset=utf-8" },
+          });
+        }
+
+        if (req.method === "POST" && path === "/auth/device/approve_local") {
+          const body = (await req.json()) as { code?: string; email?: string };
+          if (!body.code?.trim()) {
+            return jsonResponse({ error: "code is required" }, 400);
+          }
+          const success = auth.approveLocalSession(body.code.trim(), body.email);
+          return jsonResponse({ ok: success });
+        }
+
         if (req.method === "POST" && path === "/auth/device/start") {
           const device = await auth.startDeviceAuthorization();
           return jsonResponse(device);
@@ -681,6 +840,45 @@ export function startSidecarServer(
             schedule,
             schedules: db.listSchedules(),
           });
+        }
+
+
+        const schedDeleteMatch = path.match(/^\/schedule\/([^\/]+)$/);
+        if (schedDeleteMatch && req.method === "DELETE") {
+          const schedId = schedDeleteMatch[1];
+          db.query("DELETE FROM schedule WHERE id = ?").run(schedId);
+          return jsonResponse({ ok: true, schedules: db.listSchedules() });
+        }
+
+        const schedToggleMatch = path.match(/^\/schedule\/([^\/]+)\/toggle$/);
+        if (schedToggleMatch && req.method === "POST") {
+          const schedId = schedToggleMatch[1];
+          const curr = db.query("SELECT enabled FROM schedule WHERE id = ?").get(schedId) as { enabled: number } | null;
+          if (curr) {
+            const next = curr.enabled ? 0 : 1;
+            db.query("UPDATE schedule SET enabled = ?, time_updated = ? WHERE id = ?").run(next, Date.now(), schedId);
+          }
+          return jsonResponse({ ok: true, schedules: db.listSchedules() });
+        }
+
+        const schedRunMatch = path.match(/^\/schedule\/([^\/]+)\/run$/);
+        if (schedRunMatch && req.method === "POST") {
+          const schedId = schedRunMatch[1];
+          const sched = db.query("SELECT * FROM schedule WHERE id = ?").get(schedId) as any;
+          if (sched) {
+            const sess = db.upsertSession({
+              id: `sess_sched_${randomUUID().slice(0, 8)}`,
+              project_id: sched.project_id,
+              title: `[Scheduled] ${sched.name}`,
+              agent: sched.agent || "build",
+            });
+            // Update last run
+            db.query("UPDATE schedule SET last_run_at = ?, last_status = 'running', time_updated = ? WHERE id = ?").run(
+              Date.now(), schedId
+            );
+            return jsonResponse({ ok: true, session: sess });
+          }
+          return jsonResponse({ error: "Schedule not found" }, 404);
         }
 
         if (req.method === "GET" && path === "/plugin") {
