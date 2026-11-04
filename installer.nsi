@@ -21,6 +21,9 @@ Section "Entry Desktop" SecMain
 
   File "native-gui/target/x86_64-pc-windows-gnu/release/entry-desktop.exe"
   File "dist/entry-agent-sidecar.exe"
+  SetOutPath "$INSTDIR\ui\dist"
+  File /r "ui/dist\*.*"
+  SetOutPath "$INSTDIR"
   File "native-gui/assets/favicon.ico"
 
   ; Create Start Menu & Desktop Shortcuts with Entry Favicon Icon

@@ -8,11 +8,7 @@
  * - Handle unavailable models, insufficient credits, authentication expiration, and network failures.
  */
 
-const FALLBACK_ORIGINS = [
-  "https://entry-agents.dev",
-  "https://entry-project-b.vercel.app",
-  "https://entry-desktop-backend.vercel.app",
-];
+const FALLBACK_ORIGINS = ["https://entry-agents.dev"];
 
 export interface LiveDesktopModel {
   id: string;

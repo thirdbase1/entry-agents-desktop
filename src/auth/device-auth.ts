@@ -17,11 +17,7 @@ import { OsCredentialStore } from "./credential-store";
 export const DEFAULT_ENTRY_URL =
   process.env.ENTRY_BACKEND_URL ?? "https://entry-agents.dev";
 
-export const FALLBACK_ENTRY_BACKEND_URLS = [
-  "https://entry-agents.dev",
-  "https://entry-project-b.vercel.app",
-  "https://entry-desktop-backend.vercel.app",
-];
+export const FALLBACK_ENTRY_BACKEND_URLS = ["https://entry-agents.dev"];
 
 export interface DeviceAuthorizeResponse {
   device_code: string;

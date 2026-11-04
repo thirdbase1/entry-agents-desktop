@@ -27,7 +27,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { listVisibleAgents } from "../agent/agents";
 import { OsCredentialStore } from "../auth/credential-store";
@@ -157,6 +157,63 @@ export function startSidecarServer(
       const path = url.pathname;
 
       try {
+        
+        // --- Static UI Assets (React 19 + TypeScript + Vite) ---
+        const exeDir = dirname(process.execPath);
+        const distCandidates = [
+          resolve(exeDir, "ui/dist"),
+          resolve(exeDir, "dist"),
+          resolve(__dirname, "../../ui/dist"),
+          resolve(process.cwd(), "ui/dist"),
+        ];
+        const uiDistDir = distCandidates.find(d => existsSync(resolve(d, "index.html"))) ?? distCandidates[0];
+        if (req.method === "GET") {
+          let filePath: string | null = null;
+          let contentType = "text/html; charset=utf-8";
+
+          if (path === "/" || path === "/index.html") {
+            filePath = resolve(uiDistDir, "index.html");
+          } else if (path.startsWith("/assets/")) {
+            filePath = resolve(uiDistDir, path.slice(1));
+            if (path.endsWith(".js")) contentType = "application/javascript; charset=utf-8";
+            else if (path.endsWith(".css")) contentType = "text/css; charset=utf-8";
+            else if (path.endsWith(".svg")) contentType = "image/svg+xml";
+            else if (path.endsWith(".json")) contentType = "application/json";
+          } else if (path === "/favicon.svg" || path === "/favicon.ico") {
+            filePath = resolve(uiDistDir, "favicon.svg");
+            contentType = "image/svg+xml";
+          }
+
+          if (filePath && existsSync(filePath)) {
+            try {
+              const fileBytes = readFileSync(filePath);
+              return new Response(fileBytes, {
+                headers: {
+                  "Content-Type": contentType,
+                  "Cache-Control": path.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache",
+                },
+              });
+            } catch {}
+          }
+        }
+
+        // --- Seamless Auth Callback ---
+        if (req.method === "GET" && path === "/auth/callback") {
+          const token = url.searchParams.get("token") || url.searchParams.get("session_token");
+          if (token) {
+            try {
+              await auth.setSessionToken(token);
+              return new Response(
+                "<!doctype html><html><body style=\"background:#141414;color:#fff;font-family:sans-serif;display:grid;place-items:center;height:90vh\"><div style=\"text-align:center\"><h2>Authorized!</h2><p>You can close this tab and return to Entry Desktop.</p><script>setTimeout(() => window.close(), 1200);</script></div></body></html>",
+                { headers: { "Content-Type": "text/html; charset=utf-8" } }
+              );
+            } catch (err) {
+              return jsonResponse({ error: "Failed to persist authentication token" }, 400);
+            }
+          }
+          return jsonResponse({ error: "Missing token parameter" }, 400);
+        }
+
         // 1. Health probe
         if (
           req.method === "GET" &&
