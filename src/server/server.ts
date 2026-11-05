@@ -28,7 +28,7 @@
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { listVisibleAgents } from "../agent/agents";
 import { OsCredentialStore } from "../auth/credential-store";
 import { DEFAULT_ENTRY_URL, EntryDeviceAuthService } from "../auth/device-auth";
